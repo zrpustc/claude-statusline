@@ -2,7 +2,6 @@
 # Claude Code status line
 # Line 1: OS icon | directory | git branch+status | model
 # Line 2: context bar | worktree | usage (API cost or subscription limits)
-# Line 3-5: tools activity | agent status | todo progress (from transcript)
 
 input=$(cat)
 
@@ -287,6 +286,7 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     todos_line=$(sed -n '4p' "$transcript_cache")
   else
     # Parse transcript with proper tool_use/tool_result matching
+    # Only keep last 20 tools like claude-hud does
     parsed=$(tail -500 "$transcript_path" 2>/dev/null | jq -s '
       # Collect all tool_use from assistant messages
       [.[] | select(.type == "assistant") | .message.content[]? |
@@ -296,35 +296,33 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
       [.[] | select(.type == "user") | .message.content[]? |
         select(type == "object" and .type == "tool_result") | .tool_use_id] as $completed_ids |
 
-      # Build tool entries with status
-      ($tool_uses | map({
-        id: .id,
-        name: .name,
-        target: (.input.file_path // .input.pattern // .input.command // null),
-        completed: (. as $t | $completed_ids | index($t.id) != null),
-        input: .input
-      })) as $tools_with_status |
+      # Build tool entries with status (only common tools)
+      ($tool_uses | map(select(.name | test("^(Read|Edit|Write|Grep|Glob|Bash|WebFetch)$"))) |
+        map({
+          id: .id,
+          name: .name,
+          target: (.input.file_path // .input.pattern // .input.command // null),
+          completed: (. as $t | $completed_ids | index($t.id) != null)
+        }) | .[-20:]  # Only keep last 20 like claude-hud
+      ) as $recent_tools |
 
-      # Running tools (not completed, common tools only)
-      ($tools_with_status | map(select(.completed == false and
-        (.name | test("^(Read|Edit|Write|Grep|Glob|Bash|WebFetch)$")))) | .[-2:] |
+      # Running tools (not completed) - show last 2
+      ($recent_tools | map(select(.completed == false)) | .[-2:] |
         map("◐ " + .name + (if .target then ": " + (.target | split("/")[-1] | .[0:18]) else "" end))
       ) as $running |
 
-      # Completed tools grouped by name
-      ($tools_with_status | map(select(.completed == true and
-        (.name | test("^(Read|Edit|Write|Grep|Glob|Bash)$")))) |
+      # Completed tools - aggregate count from recent 20, show top 4
+      ($recent_tools | map(select(.completed == true)) |
         group_by(.name) | map({name: .[0].name, count: length}) |
         sort_by(-.count) | .[0:4] |
         map("✓ " + .name + " ×" + (.count | tostring))
       ) as $completed |
 
-      # Running agents
-      ($tools_with_status | map(select(.name == "Agent" and .completed == false)) | last |
-        if . then {
-          subtype: .input.subagent_type,
-          desc: .input.description
-        } else null end
+      # Running agents (from all tool_uses, not just recent)
+      ([$tool_uses[] | select(.name == "Agent")] |
+        map({id: .id, subtype: .input.subagent_type, desc: .input.description}) |
+        map(. + {completed: (. as $t | $completed_ids | index($t.id) != null)}) |
+        map(select(.completed == false)) | last
       ) as $agent |
 
       # Todos - track by TaskCreate and TaskUpdate
@@ -376,7 +374,7 @@ fi
 
 # === OUTPUT ===
 
-SEP="${SUBTEXT}│${RESET}"
+SEP="${SUBTEXT}|${RESET}"
 
 # Line 1: [model] directory │ git branch+status
 printf "${TEXT}[${model_display:-Claude}]${RESET} "
