@@ -28,7 +28,7 @@ A beautiful, feature-rich statusline for [Claude Code](https://claude.ai/code) w
 ## Preview
 
 ```
-[Opus 4.5] 󰀵 ~/󰈙 /project │  main ?
+[Opus 4.5] ~/project │  main ?
 Context ████░░░░░░ 45% │ $20.7/$26.2 W$181 M$181
 ✓ Edit: auth.ts | ✓ Read ×3 | ✓ Grep ×2
 ◐ explore: Finding auth code
