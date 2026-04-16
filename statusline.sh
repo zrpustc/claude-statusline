@@ -393,10 +393,10 @@ line2=""
 # Line 3: tools activity (muted subtext color)
 [ -n "$tools_line" ] && printf "${SUBTEXT}${tools_line}${RESET}\n"
 
-# Line 4: agent status
-[ -n "$agents_line" ] && printf "${YELLOW}${agents_line}${RESET}\n"
+# Line 4: agent status (muted subtext color)
+[ -n "$agents_line" ] && printf "${SUBTEXT}${agents_line}${RESET}\n"
 
-# Line 5: todo progress
-[ -n "$todos_line" ] && printf "${GREEN}${todos_line}${RESET}\n"
+# Line 5: todo progress (muted subtext color)
+[ -n "$todos_line" ] && printf "${SUBTEXT}${todos_line}${RESET}\n"
 
 exit 0

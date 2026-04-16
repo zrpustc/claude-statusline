@@ -127,17 +127,11 @@ npm install -g ccusage
 | Todo 进度 | 绿色 | `#a6e3a1` |
 | 分隔符 | 副文本色 | `#a6adc8` |
 
-## 使用的 Nerd Font 图标
+## Nerd Font 图标
 
-| 图标 | 码点 | 描述 |
-|------|------|------|
-| 󰀵 | `U+F0035` | macOS 图标 |
-| 󰈙 | `U+F0219` | 文档文件夹 |
-|  | `U+F019` | 下载文件夹 |
-| 󰝚 | `U+F075A` | 音乐文件夹 |
-|  | `U+F03E` | 图片文件夹 |
-| 󰲋 | `U+F0C8B` | 开发者文件夹 |
-|  | `U+E725` | Git 分支 |
+本状态栏使用 [Nerd Font](https://www.nerdfonts.com/) 图标。请安装 Nerd Font（推荐 JetBrainsMono Nerd Font）并在终端中配置使用。
+
+使用的图标：macOS 图标、文件夹图标（文档、下载、音乐、图片、开发者）、Git 分支图标。
 
 ## 自定义
 

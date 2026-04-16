@@ -127,17 +127,11 @@ Uses [Catppuccin Mocha](https://github.com/catppuccin/catppuccin) colors:
 | Todo progress | Green | `#a6e3a1` |
 | Separator | Subtext | `#a6adc8` |
 
-## Nerd Font Icons Used
+## Nerd Font Icons
 
-| Icon | Codepoint | Description |
-|------|-----------|-------------|
-| 󰀵 | `U+F0035` | macOS logo |
-| 󰈙 | `U+F0219` | Documents folder |
-|  | `U+F019` | Downloads folder |
-| 󰝚 | `U+F075A` | Music folder |
-|  | `U+F03E` | Pictures folder |
-| 󰲋 | `U+F0C8B` | Developer folder |
-|  | `U+E725` | Git branch |
+This statusline uses [Nerd Font](https://www.nerdfonts.com/) icons. Install a Nerd Font (e.g., JetBrainsMono Nerd Font) and configure your terminal to use it.
+
+Icons used: macOS logo, folder icons (Documents, Downloads, Music, Pictures, Developer), Git branch icon.
 
 ## Customization
 
