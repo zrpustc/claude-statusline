@@ -342,15 +342,15 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     ' 2>/dev/null)
 
     if [ -n "$parsed" ] && echo "$parsed" | jq -e . &>/dev/null; then
-      # Build tools line: ◐ running (yellow) | ✓ completed (green)
+      # Build tools line: ◐ running | ✓ completed (all in muted subtext color)
       running=$(echo "$parsed" | jq -r '.running | join(" | ")')
       completed=$(echo "$parsed" | jq -r '.completed | join(" | ")')
       tools_line=""
       if [ -n "$running" ] && [ "$running" != "" ]; then
-        tools_line="${YELLOW}${running}${RESET}"
-        [ -n "$completed" ] && [ "$completed" != "" ] && tools_line="$tools_line ${SUBTEXT}|${RESET} ${GREEN}${completed}${RESET}"
+        tools_line="${running}"
+        [ -n "$completed" ] && [ "$completed" != "" ] && tools_line="$tools_line | $completed"
       elif [ -n "$completed" ] && [ "$completed" != "" ]; then
-        tools_line="${GREEN}${completed}${RESET}"
+        tools_line="${completed}"
       fi
 
       # Build agent line: ◐ type: description
@@ -390,8 +390,8 @@ line2=""
 [ -n "$usage_info" ] && line2="${line2:+${line2} ${SEP} }${usage_info}"
 [ -n "$line2" ] && printf "${line2}${RESET}\n"
 
-# Line 3: tools activity (colors already embedded)
-[ -n "$tools_line" ] && printf "${tools_line}\n"
+# Line 3: tools activity (muted subtext color)
+[ -n "$tools_line" ] && printf "${SUBTEXT}${tools_line}${RESET}\n"
 
 # Line 4: agent status
 [ -n "$agents_line" ] && printf "${YELLOW}${agents_line}${RESET}\n"
