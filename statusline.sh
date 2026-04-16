@@ -365,3 +365,5 @@ line2=""
 
 # Line 5: todo progress
 [ -n "$todos_line" ] && printf "${GREEN}${todos_line}${RESET}\n"
+
+exit 0
