@@ -162,7 +162,7 @@ Edit `~/.claude/statusline.sh` to customize:
 
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - Color palette
 - [ccusage](https://github.com/ryoppippi/ccusage) - Cost tracking
-- [claude-hud](https://github.com/jarrodwatts/claude-hud) - Transcript parsing inspiration
+- [claude-hud](https://github.com/jarrodwatts/claude-hud) - Inspiration
 - [Starship](https://starship.rs/) - Prompt design inspiration
 
 ## License
