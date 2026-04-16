@@ -2,6 +2,7 @@
 # Claude Code status line
 # Line 1: OS icon | directory | git branch+status | model
 # Line 2: context bar | worktree | usage (API cost or subscription limits)
+# Line 3-5: tools activity | agent status | todo progress (from transcript)
 
 input=$(cat)
 
@@ -263,9 +264,84 @@ if [ -n "$wt_name" ] && [ "$wt_name" != "null" ]; then
   wt_info="${SAPPHIRE}wt:${wt_name}${wt_branch:+ (${wt_branch})}${RESET}"
 fi
 
+# --- Parse transcript for tools, agents, todos ---
+transcript_path=$(echo "$input" | jq -r '.transcript_path // empty')
+tools_line=""
+agents_line=""
+todos_line=""
+
+if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
+  # Cache based on file mtime
+  transcript_cache="/tmp/cl_transcript_cache.txt"
+  transcript_mtime=$(stat -f %m "$transcript_path" 2>/dev/null || echo 0)
+  cache_valid=false
+
+  if [ -f "$transcript_cache" ]; then
+    cached_mtime=$(head -1 "$transcript_cache" 2>/dev/null)
+    [ "$cached_mtime" = "$transcript_mtime" ] && cache_valid=true
+  fi
+
+  if [ "$cache_valid" = true ]; then
+    tools_line=$(sed -n '2p' "$transcript_cache")
+    agents_line=$(sed -n '3p' "$transcript_cache")
+    todos_line=$(sed -n '4p' "$transcript_cache")
+  else
+    # Parse transcript - only assistant messages have tool_use
+    parsed=$(tail -300 "$transcript_path" 2>/dev/null | grep -E '"type"\s*:\s*"assistant"' | jq -s '
+      [.[] | .message.content[]? | select(type == "object" and .type == "tool_use")] |
+
+      # Group by tool type
+      (group_by(.name) |
+        map({name: .[0].name, count: length, last_target: (.[-1].input.file_path // .[-1].input.pattern // null)}) |
+        map(select(.name | test("^(Read|Edit|Write|Grep|Glob|Bash)$")))
+      ) as $tools |
+
+      # Find last agent
+      (map(select(.name == "Agent")) | last |
+        if . then {desc: .input.description, subtype: .input.subagent_type} else null end
+      ) as $agent |
+
+      # Count todos
+      ([.[] | select(.name == "TaskCreate")] | length) as $todo_total |
+      ([.[] | select(.name == "TaskUpdate" and .input.status == "completed")] | length) as $todo_done |
+      ([.[] | select(.name == "TaskCreate") | .input.subject] | last) as $task_subject |
+
+      {tools: $tools, agent: $agent, todo_total: $todo_total, todo_done: $todo_done, task_subject: $task_subject}
+    ' 2>/dev/null)
+
+    if [ -n "$parsed" ] && echo "$parsed" | jq -e . &>/dev/null; then
+      # Build tools line
+      tools_count=$(echo "$parsed" | jq '.tools | length')
+      if [ "$tools_count" -gt 0 ]; then
+        tools_line=$(echo "$parsed" | jq -r '.tools | map(
+          if .count == 1 then "✓ " + .name + (if .last_target then ": " + (.last_target | split("/")[-1] | .[0:18]) else "" end)
+          else "✓ " + .name + " ×" + (.count | tostring)
+          end
+        ) | join(" | ")')
+      fi
+
+      # Build agent line
+      agent_desc=$(echo "$parsed" | jq -r '.agent.desc // empty')
+      agent_type=$(echo "$parsed" | jq -r '.agent.subtype // empty')
+      [ -n "$agent_desc" ] && agents_line="◐ ${agent_type:-agent}: ${agent_desc}"
+
+      # Build todo line
+      todo_total=$(echo "$parsed" | jq -r '.todo_total // 0')
+      todo_done=$(echo "$parsed" | jq -r '.todo_done // 0')
+      task_subject=$(echo "$parsed" | jq -r '.task_subject // empty')
+      if [ "$todo_total" -gt 0 ]; then
+        [ ${#task_subject} -gt 35 ] && task_subject="${task_subject:0:32}..."
+        [ -n "$task_subject" ] && todos_line="▸ ${task_subject} (${todo_done}/${todo_total})" || todos_line="▸ Tasks (${todo_done}/${todo_total})"
+      fi
+    fi
+
+    # Save to cache
+    printf '%s\n%s\n%s\n%s\n' "$transcript_mtime" "$tools_line" "$agents_line" "$todos_line" > "$transcript_cache" 2>/dev/null
+  fi
+fi
+
 # === OUTPUT ===
 
-# Separator
 SEP="${SUBTEXT}│${RESET}"
 
 # Line 1: [model] directory │ git branch+status
@@ -279,6 +355,13 @@ line2=""
 [ -n "$ctx_info" ] && line2="${ctx_info}"
 [ -n "$wt_info" ] && line2="${line2:+${line2} ${SEP} }${wt_info}"
 [ -n "$usage_info" ] && line2="${line2:+${line2} ${SEP} }${usage_info}"
-if [ -n "$line2" ]; then
-  printf "${line2}${RESET}\n"
-fi
+[ -n "$line2" ] && printf "${line2}${RESET}\n"
+
+# Line 3: tools activity
+[ -n "$tools_line" ] && printf "${SAPPHIRE}${tools_line}${RESET}\n"
+
+# Line 4: agent status
+[ -n "$agents_line" ] && printf "${YELLOW}${agents_line}${RESET}\n"
+
+# Line 5: todo progress
+[ -n "$todos_line" ] && printf "${GREEN}${todos_line}${RESET}\n"
