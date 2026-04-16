@@ -195,7 +195,7 @@ else
       fi
     fi
 
-    # --- Weekly cost - cached 300s ---
+    # --- Weekly cost - cached 60s ---
     weekly_cache="/tmp/cl_status_weekly.txt"
     if [ -f "$weekly_cache" ]; then
       mtime=$(stat -f %m "$weekly_cache" 2>/dev/null || echo 0)
@@ -203,7 +203,7 @@ else
     else
       age=9999
     fi
-    if [ "$age" -lt 300 ]; then
+    if [ "$age" -lt 60 ]; then
       weekly_raw=$(cat "$weekly_cache")
     else
       weekly_raw=$(ccusage weekly --json 2>/dev/null)
@@ -218,7 +218,7 @@ else
       fi
     fi
 
-    # --- Monthly cost - cached 600s ---
+    # --- Monthly cost - cached 60s ---
     monthly_cache="/tmp/cl_status_monthly.txt"
     if [ -f "$monthly_cache" ]; then
       mtime=$(stat -f %m "$monthly_cache" 2>/dev/null || echo 0)
@@ -226,7 +226,7 @@ else
     else
       age=9999
     fi
-    if [ "$age" -lt 600 ]; then
+    if [ "$age" -lt 60 ]; then
       monthly_raw=$(cat "$monthly_cache")
     else
       monthly_raw=$(ccusage monthly --json 2>/dev/null)
@@ -342,14 +342,15 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     ' 2>/dev/null)
 
     if [ -n "$parsed" ] && echo "$parsed" | jq -e . &>/dev/null; then
-      # Build tools line: ◐ running | ✓ completed
+      # Build tools line: ◐ running (yellow) | ✓ completed (green)
       running=$(echo "$parsed" | jq -r '.running | join(" | ")')
       completed=$(echo "$parsed" | jq -r '.completed | join(" | ")')
+      tools_line=""
       if [ -n "$running" ] && [ "$running" != "" ]; then
-        tools_line="$running"
-        [ -n "$completed" ] && [ "$completed" != "" ] && tools_line="$tools_line | $completed"
+        tools_line="${YELLOW}${running}${RESET}"
+        [ -n "$completed" ] && [ "$completed" != "" ] && tools_line="$tools_line ${SUBTEXT}|${RESET} ${GREEN}${completed}${RESET}"
       elif [ -n "$completed" ] && [ "$completed" != "" ]; then
-        tools_line="$completed"
+        tools_line="${GREEN}${completed}${RESET}"
       fi
 
       # Build agent line: ◐ type: description
@@ -389,8 +390,8 @@ line2=""
 [ -n "$usage_info" ] && line2="${line2:+${line2} ${SEP} }${usage_info}"
 [ -n "$line2" ] && printf "${line2}${RESET}\n"
 
-# Line 3: tools activity
-[ -n "$tools_line" ] && printf "${SAPPHIRE}${tools_line}${RESET}\n"
+# Line 3: tools activity (colors already embedded)
+[ -n "$tools_line" ] && printf "${tools_line}\n"
 
 # Line 4: agent status
 [ -n "$agents_line" ] && printf "${YELLOW}${agents_line}${RESET}\n"
