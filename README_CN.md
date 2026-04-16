@@ -162,7 +162,7 @@ npm install -g ccusage
 
 - [Catppuccin](https://github.com/catppuccin/catppuccin) - 配色方案
 - [ccusage](https://github.com/ryoppippi/ccusage) - 费用追踪
-- [claude-hud](https://github.com/jarrodwatts/claude-hud) - Transcript 解析灵感来源
+- [claude-hud](https://github.com/jarrodwatts/claude-hud) - 灵感来源
 - [Starship](https://starship.rs/) - 提示符设计灵感
 
 ## 许可证
