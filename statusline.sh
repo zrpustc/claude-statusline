@@ -286,51 +286,85 @@ if [ -n "$transcript_path" ] && [ -f "$transcript_path" ]; then
     agents_line=$(sed -n '3p' "$transcript_cache")
     todos_line=$(sed -n '4p' "$transcript_cache")
   else
-    # Parse transcript - only assistant messages have tool_use
-    parsed=$(tail -300 "$transcript_path" 2>/dev/null | grep -E '"type"\s*:\s*"assistant"' | jq -s '
-      [.[] | .message.content[]? | select(type == "object" and .type == "tool_use")] |
+    # Parse transcript with proper tool_use/tool_result matching
+    parsed=$(tail -500 "$transcript_path" 2>/dev/null | jq -s '
+      # Collect all tool_use from assistant messages
+      [.[] | select(.type == "assistant") | .message.content[]? |
+        select(type == "object" and .type == "tool_use")] as $tool_uses |
 
-      # Group by tool type
-      (group_by(.name) |
-        map({name: .[0].name, count: length, last_target: (.[-1].input.file_path // .[-1].input.pattern // null)}) |
-        map(select(.name | test("^(Read|Edit|Write|Grep|Glob|Bash)$")))
-      ) as $tools |
+      # Collect all tool_result from user messages
+      [.[] | select(.type == "user") | .message.content[]? |
+        select(type == "object" and .type == "tool_result") | .tool_use_id] as $completed_ids |
 
-      # Find last agent
-      (map(select(.name == "Agent")) | last |
-        if . then {desc: .input.description, subtype: .input.subagent_type} else null end
+      # Build tool entries with status
+      ($tool_uses | map({
+        id: .id,
+        name: .name,
+        target: (.input.file_path // .input.pattern // .input.command // null),
+        completed: (. as $t | $completed_ids | index($t.id) != null),
+        input: .input
+      })) as $tools_with_status |
+
+      # Running tools (not completed, common tools only)
+      ($tools_with_status | map(select(.completed == false and
+        (.name | test("^(Read|Edit|Write|Grep|Glob|Bash|WebFetch)$")))) | .[-2:] |
+        map("◐ " + .name + (if .target then ": " + (.target | split("/")[-1] | .[0:18]) else "" end))
+      ) as $running |
+
+      # Completed tools grouped by name
+      ($tools_with_status | map(select(.completed == true and
+        (.name | test("^(Read|Edit|Write|Grep|Glob|Bash)$")))) |
+        group_by(.name) | map({name: .[0].name, count: length}) |
+        sort_by(-.count) | .[0:4] |
+        map("✓ " + .name + " ×" + (.count | tostring))
+      ) as $completed |
+
+      # Running agents
+      ($tools_with_status | map(select(.name == "Agent" and .completed == false)) | last |
+        if . then {
+          subtype: .input.subagent_type,
+          desc: .input.description
+        } else null end
       ) as $agent |
 
-      # Count todos
-      ([.[] | select(.name == "TaskCreate")] | length) as $todo_total |
-      ([.[] | select(.name == "TaskUpdate" and .input.status == "completed")] | length) as $todo_done |
-      ([.[] | select(.name == "TaskCreate") | .input.subject] | last) as $task_subject |
+      # Todos - track by TaskCreate and TaskUpdate
+      ($tool_uses | map(select(.name == "TaskCreate")) | length) as $todo_total |
+      ($tool_uses | map(select(.name == "TaskUpdate" and .input.status == "completed")) | length) as $todo_done |
+      ($tool_uses | map(select(.name == "TaskUpdate" and .input.status == "in_progress")) | last | .input.subject // null) as $current_task |
+      ($tool_uses | map(select(.name == "TaskCreate")) | last | .input.subject // null) as $last_created |
 
-      {tools: $tools, agent: $agent, todo_total: $todo_total, todo_done: $todo_done, task_subject: $task_subject}
+      {
+        running: $running,
+        completed: $completed,
+        agent: $agent,
+        todo_total: $todo_total,
+        todo_done: $todo_done,
+        current_task: ($current_task // $last_created)
+      }
     ' 2>/dev/null)
 
     if [ -n "$parsed" ] && echo "$parsed" | jq -e . &>/dev/null; then
-      # Build tools line
-      tools_count=$(echo "$parsed" | jq '.tools | length')
-      if [ "$tools_count" -gt 0 ]; then
-        tools_line=$(echo "$parsed" | jq -r '.tools | map(
-          if .count == 1 then "✓ " + .name + (if .last_target then ": " + (.last_target | split("/")[-1] | .[0:18]) else "" end)
-          else "✓ " + .name + " ×" + (.count | tostring)
-          end
-        ) | join(" | ")')
+      # Build tools line: ◐ running | ✓ completed
+      running=$(echo "$parsed" | jq -r '.running | join(" | ")')
+      completed=$(echo "$parsed" | jq -r '.completed | join(" | ")')
+      if [ -n "$running" ] && [ "$running" != "" ]; then
+        tools_line="$running"
+        [ -n "$completed" ] && [ "$completed" != "" ] && tools_line="$tools_line | $completed"
+      elif [ -n "$completed" ] && [ "$completed" != "" ]; then
+        tools_line="$completed"
       fi
 
-      # Build agent line
+      # Build agent line: ◐ type: description
       agent_desc=$(echo "$parsed" | jq -r '.agent.desc // empty')
       agent_type=$(echo "$parsed" | jq -r '.agent.subtype // empty')
       [ -n "$agent_desc" ] && agents_line="◐ ${agent_type:-agent}: ${agent_desc}"
 
-      # Build todo line
+      # Build todo line: ▸ task (done/total)
       todo_total=$(echo "$parsed" | jq -r '.todo_total // 0')
       todo_done=$(echo "$parsed" | jq -r '.todo_done // 0')
-      task_subject=$(echo "$parsed" | jq -r '.task_subject // empty')
+      task_subject=$(echo "$parsed" | jq -r '.current_task // empty')
       if [ "$todo_total" -gt 0 ]; then
-        [ ${#task_subject} -gt 35 ] && task_subject="${task_subject:0:32}..."
+        [ ${#task_subject} -gt 40 ] && task_subject="${task_subject:0:37}..."
         [ -n "$task_subject" ] && todos_line="▸ ${task_subject} (${todo_done}/${todo_total})" || todos_line="▸ Tasks (${todo_done}/${todo_total})"
       fi
     fi
